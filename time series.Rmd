@@ -1,0 +1,157 @@
+---
+title: "Exam"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+date: "2022-08-15"
+---
+
+```{r }
+rm(list=ls())
+graphics.off()
+
+```
+
+```{r }
+library(fpp2)
+library(tseries)
+
+```
+
+
+```{r}
+library(forecast)
+```
+
+```{r}
+library(xlsx)
+library(TSstudio)
+library(zoo)
+library(xts)
+```
+
+
+
+```{r, setup, include=FALSE}
+
+```
+
+
+$$\color{red}{\text{Data}}$$
+
+
+
+```{r}
+data=read.xlsx("C:\\Users\\youssefbaz\\Desktop\\Time series\\Elec-train.xlsx",1)
+```
+
+```{r}
+
+dt=ts(data$Power..kW.,start=c(2010,1),end=c(2010,4603),frequency=24*365*4)
+```
+
+
+```{r}
+leng=(as.numeric(as.POSIXct("2010-02-17 23:45:00"))-as.numeric(as.POSIXct("2010-01-01 01:15:00")))/(60*15)+1
+
+
+xtsdat <- xts(data$Power..kW.[c(1:leng)], 
+  order.by = seq(as.POSIXct("2010-01-01 01:15:00"), length=leng, by=900))
+head(xtsdat)
+```
+```{r}
+plot(xtsdat,main="Electricity consumption (kW)")
+```
+
+
+```{r}
+tsdt=ts(data$Power..kW.[c(1:leng)],start=c(1,6),end=c(48,96),frequency=24*4)
+```
+
+```{r}
+ggseasonplot(tsdt)+scale_color_discrete(name= "Days")+ggtitle("Seasonal plot of Electricity consumption (kW)") +xlab("Every 15 minutes")
+#+scale_x_discrete(breaks=,labels=rv)
+#theme(axis.text.x=element_text(angle=90))
+```
+```{r}
+y=diff(tsdt,lag=96)
+plot(y)
+x1=diff(tsdt,lag=96*7)
+plot(x1)
+Box.test(x1,lag=10,type="Ljung-Box")
+```
+
+```{r}
+leng=(as.numeric(as.POSIXct("2010-02-17 23:45:00"))-as.numeric(as.POSIXct("2010-01-01 01:15:00"))) / (60*15)+1
+tsdt=ts(data$Power..kW.[c(1:leng)],start=c(1,6),end=c(7,96*7-96),frequency=96*7)
+ggseasonplot(tsdt)
+
+```
+#HW
+
+```{r}
+dttrain<-head(tsdt,length(tsdt)-672)
+dttest<-tail(tsdt,672)
+
+```
+
+
+```{r}
+fit1=HoltWinters(dttrain,alpha=NULL,beta=NULL, gamma=NULL)
+plot(dttrain, main="Forecasting with additive seasonal Holt Winters",xlim=c(1,8))
+p=predict(fit1,n.ahead=672)
+lines(p,col=2)
+lines(dttest,col=3)
+legend("topleft",legend=c("dttrain","dttest","forecast"),col=c("black","green","red"),lty=c(1,1,1))
+
+```
+```{r}
+accuracy(p, dttest)
+```
+#nnar
+
+```{r}
+
+fit=nnetar(dttrain)
+print(fit)
+fr=forecast(fit,h=672)
+autoplot(fr)
+autoplot(dttrain)+autolayer(dttest,colour=1,series="Test set")+autolayer(fr$mean, series="NNAR",colour=4)
+accuracy(fr$mean,dttest)
+```
+
+#nnar with covariate
+
+```{r}
+#the variable tsdt1 was already defined before, but we add it in this chunk of code for more clarity
+tsdt1=ts(data$Power..kW.[c(1:leng)],start=c(1,6),end=c(7,96*7-96),frequency=96*7)
+tstemp1=ts(data$Temp..C..[c(1:leng)],start=c(1,6),end=c(7,96*7-96),frequency=96*7)
+
+dttrain1<-head(tsdt1,length(tsdt1)-672)
+dttest1<-tail(tsdt1,672)
+dttrain2<-head(tstemp1,length(tstemp1)-672)
+dttest2<-tail(tstemp1,672)
+
+fit2=nnetar(dttrain1, xreg=dttrain2)
+print(fit2)
+fr=forecast(fit2,xreg=dttest2,h=672)
+autoplot(dttrain1)+autolayer(dttest1,colour=1,series="Test set")+autolayer(fr$mean, series="NNAR",colour=4)
+accuracy(fr$mean,dttest1)
+
+```
+#time series regression
+```{r}
+
+mx=cbind(dttrain1,dttrain2)
+colnames(mx)=c("eleccons","temperature")
+fit=tslm(mx[,"eleccons"]~mx[,"temperature"]+trend+season)
+summary(fit)
+
+
+```
+
+```{r}
+
+checkresiduals(fit,test="LB",plot=TRUE)
+```
